@@ -1,22 +1,24 @@
 import { fireEvent, getByText } from '@testing-library/dom'
 import '@testing-library/jest-dom/extend-expect'
 import { JSDOM } from 'jsdom'
-import fs from 'fs'
 import path from 'path'
-
-const html = fs.readFileSync(path.resolve(__dirname, './index.html'), 'utf8');
 
 let dom
 let container
+let fullDom
+let eventListenerCallback
 
 describe('index.html', () => {
-  beforeEach(() => {
-    // Constructing a new JSDOM with this option is the key
-    // to getting the code in the script tag to execute.
-    // This is indeed dangerous and should only be done with trusted content.
-    // https://github.com/jsdom/jsdom#executing-scripts
-    dom = new JSDOM(html, { runScripts: 'dangerously' })
-    container = dom.window.document.body
+  beforeEach((done) => {
+    JSDOM.fromFile(path.resolve(__dirname, './index.html'), { runScripts: 'dangerously', resources: "usable", includeNodeLocations: true }).then(builtDom => {
+        container = builtDom.window.document.body
+        dom = builtDom.serialize()
+        fullDom = builtDom
+    }).then(() => done())
+  })
+
+  afterEach(() => {
+    fullDom.window.document.removeEventListener('DOMContentLoaded', eventListenerCallback)
   })
 
   it('renders a heading element', () => {
@@ -29,19 +31,41 @@ describe('index.html', () => {
     expect(getByText(container, 'Click me for a terrible pun')).toBeInTheDocument()
   })
 
-  it('renders a new paragraph via JavaScript when the button is clicked', async () => {
+  it('renders a new paragraph via JavaScript when the button is clicked', () => {
     const button = getByText(container, 'Click me for a terrible pun')
+
+    eventListenerCallback = () => {
+      fireEvent.click(button)
+      let generatedParagraphs = container.querySelectorAll('#pun-container p')
+      expect(generatedParagraphs.length).toBe(1)
+
+      fireEvent.click(button)
+      generatedParagraphs = container.querySelectorAll('#pun-container p')
+      expect(generatedParagraphs.length).toBe(2)
+
+      fireEvent.click(button)
+      generatedParagraphs = container.querySelectorAll('#pun-container p')
+      expect(generatedParagraphs.length).toBe(3)
+  }
     
-    fireEvent.click(button)
-    let generatedParagraphs = container.querySelectorAll('#pun-container p')
-    expect(generatedParagraphs.length).toBe(1)
+    fullDom.window.document.addEventListener('DOMContentLoaded', eventListenerCallback);
+  })
 
-    fireEvent.click(button)
-    generatedParagraphs = container.querySelectorAll('#pun-container p')
-    expect(generatedParagraphs.length).toBe(2)
+  it('should create a new H2 element', () => {
+    eventListenerCallback = () => {
+      const hTwo = getByText(container, "Hi There")
+      expect(hTwo).not.toBeNull();
+      expect(hTwo).toBeInTheDocument()
+    }
+    fullDom.window.document.addEventListener('DOMContentLoaded', eventListenerCallback)
+  })
 
-    fireEvent.click(button)
-    generatedParagraphs = container.querySelectorAll('#pun-container p')
-    expect(generatedParagraphs.length).toBe(3)
+  it('should be able to test jQuery', () => {
+    eventListenerCallback = () => {
+      const hTwo = getByText(container, "Yo yo yo")
+      expect(hTwo).not.toBeNull();
+      expect(hTwo).toBeInTheDocument()
+    }
+    fullDom.window.document.addEventListener('DOMContentLoaded', eventListenerCallback)
   })
 })
